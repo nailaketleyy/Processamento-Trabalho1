@@ -62,6 +62,9 @@ def equalizar_luminancia(img):
 
 def equalizar(img, modo="lum"):
     """modo: 'lum' (luminância), 'rgb' (canal a canal) ou 'cinza' (converte p/ cinza)."""
+    if modo == "hsi":
+        from .cor import equalizar_hsi
+        return equalizar_hsi(img)
     if modo == "rgb":
         return equalizar_canais(img)
     if modo == "cinza":

@@ -7,10 +7,12 @@ import numpy as np
 
 from algoritmos import histograma as hg
 from algoritmos.base import cinza
+from algoritmos.cor import rgb_para_hsi
 
 from .aba_base import Aba
 
-CORES = {"Cinza": "#404040", "R": "#d62728", "G": "#2ca02c", "B": "#1f77b4"}
+CORES = {"Cinza": "#404040", "I (HSI)": "#666666",
+         "R": "#d62728", "G": "#2ca02c", "B": "#1f77b4"}
 
 
 class AbaHistograma(Aba):
@@ -26,7 +28,7 @@ class AbaHistograma(Aba):
         linha = ttk.Frame(lf)
         linha.pack(fill="x", padx=4)
         self.var_canal = tk.StringVar(value="Cinza")
-        for c in ("Cinza", "R", "G", "B", "RGB"):
+        for c in ("Cinza", "I (HSI)", "R", "G", "B", "RGB"):
             ttk.Radiobutton(linha, text=c, value=c, variable=self.var_canal,
                             command=self.redesenhar).pack(side="left", padx=2)
         self.var_log = tk.BooleanVar(value=False)
@@ -44,6 +46,7 @@ class AbaHistograma(Aba):
         lf.pack(fill="x", padx=6, pady=4)
         self.var_eq = tk.StringVar(value="lum")
         for texto, valor in (("Luminância (preserva as cores)", "lum"),
+                             ("Intensidade HSI (preserva matiz/saturação)", "hsi"),
                              ("Cada canal RGB separadamente", "rgb"),
                              ("Converter para tons de cinza", "cinza")):
             ttk.Radiobutton(lf, text=texto, value=valor, variable=self.var_eq,
@@ -66,6 +69,9 @@ class AbaHistograma(Aba):
              "R": hg.histograma(img[..., 0]),
              "G": hg.histograma(img[..., 1]),
              "B": hg.histograma(img[..., 2])}
+        intensidade = rgb_para_hsi(img)[2]
+        h["I (HSI)"] = hg.histograma(
+            np.clip(np.floor(intensidade * 255 + 0.5), 0, 255).astype(np.uint8))
         self._cache[slot] = (img, h)
         return h
 

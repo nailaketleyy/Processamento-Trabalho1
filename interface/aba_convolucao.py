@@ -10,7 +10,10 @@ from algoritmos import convolucao as cv
 from .aba_base import Aba
 from .widgets import slider
 
-PREDEFINIDOS = ["Média (caixa)", "Gaussiano", "Identidade"] + list(cv.KERNELS_3X3) + ["Personalizado"]
+PREDEFINIDOS = [
+    "Média (caixa)", "Gaussiano", "Mediana", "Aguçamento Laplaciano",
+    "High-boost", "Identidade",
+] + list(cv.KERNELS_3X3) + ["Personalizado"]
 TAMANHOS = [str(n) for n in range(3, 22, 2)]            # 3, 5, ..., 21
 BORDAS = {"Zeros": "zeros", "Replicar borda": "replicar", "Espelhar": "espelhar"}
 SAIDAS = {"Saturar em [0, 255]": "saturar", "Valor absoluto": "absoluto",
@@ -42,8 +45,12 @@ class AbaConvolucao(Aba):
         c.grid(row=1, column=1, sticky="w", padx=4, pady=2)
         c.bind("<<ComboboxSelected>>", lambda e: self._mudou_tamanho())
 
-        self.s_sigma = slider(lf, "σ (só para o gaussiano)", 0.3, 8.0, 1.0, 0.1, self._mudou_sigma)
-        ttk.Button(lf, text="Ver / editar coeficientes...", command=self.editar).pack(pady=2)
+        self.s_sigma = slider(lf, "σ (gaussiano / high-boost)", 0.3, 8.0, 1.0, 0.1,
+                              self._mudou_sigma)
+        self.s_boost = slider(lf, "Fator A do high-boost", 1.0, 5.0, 1.5, 0.1,
+                              self._mudou_parametro)
+        self.bt_editar = ttk.Button(lf, text="Ver / editar coeficientes...", command=self.editar)
+        self.bt_editar.pack(pady=2)
         self.lbl_resumo = ttk.Label(lf, text="", wraplength=290, justify="left")
         self.lbl_resumo.pack(padx=6, pady=(0, 4))
 
@@ -53,8 +60,10 @@ class AbaConvolucao(Aba):
         ttk.Radiobutton(lf, text="Convolução", value="conv", variable=self.var_op).pack(anchor="w", padx=6)
         ttk.Radiobutton(lf, text="Correlação", value="corr", variable=self.var_op).pack(anchor="w", padx=6)
         self.var_norm = tk.BooleanVar(value=True)
-        ttk.Checkbutton(lf, text="Dividir pela soma dos coeficientes (se ≠ 0)",
-                        variable=self.var_norm).pack(anchor="w", padx=6, pady=(4, 2))
+        self.ck_norm = ttk.Checkbutton(
+            lf, text="Dividir pela soma dos coeficientes (se ≠ 0)",
+            variable=self.var_norm)
+        self.ck_norm.pack(anchor="w", padx=6, pady=(4, 2))
 
         grade = ttk.Frame(lf)
         grade.pack(fill="x", padx=6, pady=2)
@@ -85,16 +94,36 @@ class AbaConvolucao(Aba):
             self.kernel = cv.kernel_media(n)
         elif nome == "Gaussiano":
             self.kernel = cv.kernel_gaussiano(n, float(self.s_sigma.get()))
+        elif nome == "Aguçamento Laplaciano":
+            self.kernel = cv.kernel_aguçamento_laplaciano(n)
+        elif nome == "High-boost":
+            self.kernel = cv.kernel_high_boost(n, float(self.s_boost.get()),
+                                               float(self.s_sigma.get()))
         elif nome == "Identidade":
             self.kernel = cv.kernel_identidade(n)
         elif nome in cv.KERNELS_3X3:
             self.kernel = np.array(cv.KERNELS_3X3[nome][0], dtype=float)
+        self._atualizar_controles()
         self._resumo()
 
+    def _atualizar_controles(self):
+        nome = self.var_preset.get()
+        if nome in ("Mediana", "High-boost"):
+            self.bt_editar.state(["disabled"])
+            self.ck_norm.state(["disabled"])
+        else:
+            self.bt_editar.state(["!disabled"])
+            self.ck_norm.state(["!disabled"])
+
     def _resumo(self):
+        if self.var_preset.get() == "Mediana":
+            self.lbl_resumo.config(
+                text=f"Filtro mediana {self._n()}×{self._n()} · não linear; sem kernel de convolução")
+            return
         n = self.kernel.shape[0]
+        extra = f" · fator A = {self.s_boost.get():g}" if self.var_preset.get() == "High-boost" else ""
         self.lbl_resumo.config(
-            text=f"Filtro {n}×{n}  ·  soma dos coeficientes = {self.kernel.sum():g}")
+            text=f"Filtro {n}×{n} · soma dos coeficientes = {self.kernel.sum():g}{extra}")
 
     def _mudou_preset(self):
         nome = self.var_preset.get()
@@ -104,14 +133,20 @@ class AbaConvolucao(Aba):
                                else "Saturar em [0, 255]")
         elif nome != "Personalizado":
             self.var_saida.set("Saturar em [0, 255]")
-        if nome == "Personalizado":
+        if nome == "High-boost":
+            self.var_norm.set(False)
+        self._atualizar_controles()
+        if nome == "Mediana":
+            self._resumo()
+        elif nome == "Personalizado":
             self._resumo()
         else:
             self._gerar()
 
     def _mudou_tamanho(self):
         nome, n = self.var_preset.get(), self._n()
-        if nome in ("Média (caixa)", "Gaussiano", "Identidade"):
+        if nome in ("Média (caixa)", "Gaussiano", "Mediana",
+                    "Aguçamento Laplaciano", "High-boost", "Identidade"):
             self._gerar()
         else:  # filtros fixos/personalizado: corta ou completa com zeros
             self.kernel = cv.redimensionar_kernel(self.kernel, n)
@@ -120,7 +155,11 @@ class AbaConvolucao(Aba):
             self._resumo()
 
     def _mudou_sigma(self):
-        if self.var_preset.get() == "Gaussiano":
+        if self.var_preset.get() in ("Gaussiano", "High-boost"):
+            self._gerar()
+
+    def _mudou_parametro(self):
+        if self.var_preset.get() == "High-boost":
             self._gerar()
 
     # ---------------- editor de coeficientes ----------------
@@ -183,8 +222,11 @@ class AbaConvolucao(Aba):
 
     # ---------------- aplicação ----------------
     def fn_filtro(self):
+        if self.var_preset.get() == "Mediana":
+            return cv.mediana(self.app.atual, self._n(),
+                              borda=BORDAS[self.var_borda.get()])
         k = self.kernel.copy()
-        if self.var_norm.get():
+        if self.var_norm.get() and self.var_preset.get() != "High-boost":
             soma = k.sum()
             if soma != 0:
                 k = k / soma
