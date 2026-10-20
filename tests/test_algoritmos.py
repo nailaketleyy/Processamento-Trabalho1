@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -28,6 +29,12 @@ class TestOperacoesEspaciais(unittest.TestCase):
         resultado = cv.mediana(img, 3, borda="replicar")
         self.assertEqual(resultado.shape, img.shape)
         self.assertEqual(int(resultado[3, 4]), 100)
+
+    def test_mediana_nao_usa_numpy_median(self):
+        img = np.arange(25, dtype=np.uint8).reshape(5, 5)
+        with patch("algoritmos.convolucao.np.median", side_effect=AssertionError):
+            resultado = cv.mediana(img, 3)
+        self.assertEqual(resultado.shape, img.shape)
 
     def test_kernels_de_aguçamento(self):
         laplaciano = cv.kernel_aguçamento_laplaciano(5)

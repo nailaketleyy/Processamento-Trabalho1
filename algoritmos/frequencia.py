@@ -37,11 +37,62 @@ def idft2(espectro):
     return wm @ espectro @ wn.T / (m * n)
 
 
+def _fft_radix2_1d(dados, inversa=False):
+    valores = np.asarray(dados, dtype=np.complex128).copy()
+    tamanho = valores.size
+    if tamanho == 0 or tamanho & (tamanho - 1):
+        raise ValueError("A FFT própria requer dimensões que sejam potências de 2.")
+
+    indice_invertido = 0
+    for indice in range(1, tamanho):
+        bit = tamanho >> 1
+        while indice_invertido & bit:
+            indice_invertido ^= bit
+            bit >>= 1
+        indice_invertido ^= bit
+        if indice < indice_invertido:
+            valores[indice], valores[indice_invertido] = (
+                valores[indice_invertido], valores[indice])
+
+    sinal = 1 if inversa else -1
+    largura = 2
+    while largura <= tamanho:
+        metade = largura // 2
+        fatores = np.exp(sinal * 2j * np.pi * np.arange(metade) / largura)
+        for inicio in range(0, tamanho, largura):
+            par = valores[inicio:inicio + metade].copy()
+            impar = valores[inicio + metade:inicio + largura].copy() * fatores
+            valores[inicio:inicio + metade] = par + impar
+            valores[inicio + metade:inicio + largura] = par - impar
+        largura *= 2
+    if inversa:
+        valores /= tamanho
+    return valores
+
+
+def _fft2_radix2(dados, inversa=False):
+    dados = np.asarray(dados, dtype=np.complex128)
+    if dados.ndim != 2 or dados.size == 0:
+        raise ValueError("A FFT própria requer uma matriz 2D não vazia.")
+    if any(tamanho & (tamanho - 1) for tamanho in dados.shape):
+        raise ValueError(
+            "A FFT própria radix-2 requer altura e largura potências de 2; "
+            "use FFT NumPy para outras dimensões.")
+    linhas = np.stack([_fft_radix2_1d(linha, inversa) for linha in dados])
+    colunas = np.stack([
+        _fft_radix2_1d(linhas[:, coluna], inversa)
+        for coluna in range(linhas.shape[1])
+    ], axis=1)
+    return colunas
+
+
 def transformar(dados, metodo="fft"):
     if metodo == "dft":
         return dft2(dados)
     if metodo == "fft":
         return np.fft.fft2(np.asarray(dados, dtype=np.float64))
+    if metodo == "fft-propria":
+        return _fft2_radix2(dados)
     raise ValueError("Método deve ser 'dft' ou 'fft'.")
 
 
@@ -50,6 +101,8 @@ def inversa(espectro, metodo="fft"):
         return idft2(espectro)
     if metodo == "fft":
         return np.fft.ifft2(np.asarray(espectro, dtype=np.complex128))
+    if metodo == "fft-propria":
+        return _fft2_radix2(espectro, inversa=True)
     raise ValueError("Método deve ser 'dft' ou 'fft'.")
 
 
@@ -133,6 +186,27 @@ def reconstruir(espectro, metodo="fft", saida="saturar"):
     return np.clip(np.floor(imagem + 0.5), 0, 255).astype(np.uint8)
 
 
+def filtrar_rgb(img, mascara, metodo="fft", saida="saturar"):
+    """Filtra os três canais RGB com a mesma máscara de frequência."""
+    img = np.asarray(img)
+    if img.ndim != 3 or img.shape[2] != 3 or img.size == 0:
+        raise ValueError("A imagem deve ser RGB e não vazia.")
+    resultado = np.empty(img.shape, dtype=np.float64)
+    for canal in range(3):
+        espectro = transformar(img[..., canal], metodo)
+        filtrado = filtrar_espectro(espectro, mascara)
+        resultado[..., canal] = np.real(inversa(filtrado, metodo))
+    if saida == "normalizar":
+        minimo, maximo = resultado.min(), resultado.max()
+        if maximo > minimo:
+            resultado = (resultado - minimo) * (255.0 / (maximo - minimo))
+        else:
+            resultado.fill(0)
+    elif saida != "saturar":
+        raise ValueError("Saída deve ser 'saturar' ou 'normalizar'.")
+    return np.clip(np.floor(resultado + 0.5), 0, 255).astype(np.uint8)
+
+
 def convolucao_circular_frequencia(img, kernel, metodo="fft"):
     """Convolução circular 2D usando o teorema da convolução.
 
@@ -153,6 +227,16 @@ def convolucao_circular_frequencia(img, kernel, metodo="fft"):
     kp[:kh, :kw] = kernel
     kp = np.roll(kp, (-(kh // 2), -(kw // 2)), axis=(0, 1))
     return np.real(inversa(transformar(img, metodo) * transformar(kp, metodo), metodo))
+
+
+def convolucao_circular_rgb(img, kernel, metodo="fft"):
+    """Aplica a convolução circular independentemente aos canais RGB."""
+    img = np.asarray(img)
+    if img.ndim != 3 or img.shape[2] != 3 or img.size == 0:
+        raise ValueError("A imagem deve ser RGB e não vazia.")
+    canais = [convolucao_circular_frequencia(img[..., c], kernel, metodo)
+              for c in range(3)]
+    return np.stack(canais, axis=-1)
 
 
 def demo_aliasing(img, fator=2, suavizar=False):

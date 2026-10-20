@@ -3,13 +3,7 @@
 import numpy as np
 
 from .base import cinza, cinza_para_rgb
-from .convolucao import correlacao, para_uint8
-
-
-SOBEL_X = np.array(
-    [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
-SOBEL_Y = np.array(
-    [[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float64)
+from .convolucao import SOBEL_X, SOBEL_Y, correlacao, para_uint8
 
 
 def componentes_sobel(img, borda="replicar"):

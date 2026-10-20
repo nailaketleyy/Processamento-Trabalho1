@@ -26,6 +26,11 @@ class AbaGeometria(Aba):
         lf.pack(fill="x", padx=6, pady=4)
         self.sx = slider(lf, "Escala horizontal", 0.1, 3.0, 1.0, 0.1)
         self.sy = slider(lf, "Escala vertical", 0.1, 3.0, 1.0, 0.1)
+        self.var_expandir = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            lf, text="Expandir saída (limite: 16 milhões de pixels)",
+            variable=self.var_expandir,
+        ).pack(anchor="w", padx=6)
 
         lf = ttk.LabelFrame(f, text="Rotação e pivô (coordenadas x, y)")
         lf.pack(fill="x", padx=6, pady=4)
@@ -103,6 +108,7 @@ class AbaGeometria(Aba):
             deslocamento=deslocamento,
             pivo=pivo,
             interpolacao=self.var_interpolacao.get(),
+            expandir=self.var_expandir.get(),
         )
 
     def _executar(self, previsualizar):

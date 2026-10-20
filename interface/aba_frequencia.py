@@ -31,9 +31,9 @@ class AbaFrequencia(Aba):
         self._display_offset = (0, 0)
         ttk.Label(
             f,
-            text=("O processamento de frequência usa a luminância. DFT direta "
-                  "é educativa e limitada a 4096 pixels; FFT NumPy é recomendada "
-                  "para imagens maiores."),
+            text=("Filtros usam a mesma máscara nos canais RGB. DFT direta é "
+                "limitada a 4096 pixels; FFT própria radix-2 requer dimensões "
+                "potências de 2; FFT NumPy aceita dimensões arbitrárias."),
             wraplength=330, justify="left",
         ).pack(fill="x", padx=8, pady=6)
 
@@ -44,8 +44,9 @@ class AbaFrequencia(Aba):
         ttk.Label(linha, text="Transformada:").pack(side="left")
         self.var_metodo = tk.StringVar(value="fft")
         ttk.Combobox(
-            linha, textvariable=self.var_metodo, values=("fft", "dft"),
-            state="readonly", width=8,
+            linha, textvariable=self.var_metodo,
+            values=("fft", "fft-propria", "dft"),
+            state="readonly", width=12,
         ).pack(side="left", padx=4)
         ttk.Button(linha, text="Calcular espectro", command=self.calcular).pack(side="left")
         self.var_saida = tk.StringVar(value="normalizar")
@@ -68,6 +69,22 @@ class AbaFrequencia(Aba):
         self.s_notch_x = slider(lf, "Centro notch u (deslocamento vertical)", -128, 128, 30, 1)
         self.s_notch_y = slider(lf, "Centro notch v (deslocamento horizontal)", -128, 128, 30, 1)
         self.s_notch_r = slider(lf, "Raio do notch", 0, 64, 5, 1)
+        self._centros_notch = []
+        ttk.Label(lf, text="Centros notch (cada centro também remove o simétrico):").pack(
+            anchor="w", padx=5)
+        self.lb_centros_notch = tk.Listbox(lf, height=3, exportselection=False)
+        self.lb_centros_notch.pack(fill="x", padx=5, pady=2)
+        linha_notch = ttk.Frame(lf)
+        linha_notch.pack(fill="x")
+        ttk.Button(
+            linha_notch, text="Adicionar centro atual",
+            command=self._adicionar_centro_notch,
+        ).pack(side="left", padx=3)
+        ttk.Button(
+            linha_notch, text="Remover selecionado",
+            command=self._remover_centro_notch,
+        ).pack(side="left", padx=3)
+        self._adicionar_centro_notch()
         ttk.Button(lf, text="Criar máscara ideal", command=self.criar_mascara).pack(pady=3)
 
         lf = ttk.LabelFrame(f, text="Editar o espectro deslocado")
@@ -219,6 +236,19 @@ class AbaFrequencia(Aba):
         area = self._mascara[y0:y1, x0:x1]
         area[:] = area * (1 - peso) + nivel * peso
 
+    def _adicionar_centro_notch(self):
+        centro = (int(self.s_notch_x.get()), int(self.s_notch_y.get()))
+        if centro not in self._centros_notch:
+            self._centros_notch.append(centro)
+            self.lb_centros_notch.insert("end", f"u={centro[0]}, v={centro[1]}")
+
+    def _remover_centro_notch(self):
+        selecionados = self.lb_centros_notch.curselection()
+        if selecionados:
+            indice = selecionados[0]
+            self.lb_centros_notch.delete(indice)
+            del self._centros_notch[indice]
+
     def criar_mascara(self):
         if (self._espectro is None or self._imagem_fonte is not self.app.atual
                 or self._metodo_espectro != self.var_metodo.get()):
@@ -227,11 +257,11 @@ class AbaFrequencia(Aba):
                 return
         try:
             tipo = self.var_filtro.get()
-            centros = [(self.s_notch_x.get(), self.s_notch_y.get())]
             self._mascara = fq.filtro_ideal(
                 self._espectro.shape, tipo, self.s_corte.get(),
                 self.s_interno.get(), self.s_externo.get(),
-                centros=centros, raio_notch=self.s_notch_r.get(),
+                centros=self._centros_notch,
+                raio_notch=self.s_notch_r.get(),
             )
             self._desenhar_espectro()
         except ValueError as erro:
@@ -250,27 +280,26 @@ class AbaFrequencia(Aba):
             self.calcular()
         if self._espectro is None:
             return
-        resultado = fq.reconstruir(
-            fq.filtrar_espectro(self._espectro, self._mascara),
-            self.var_metodo.get(),
-            self.var_saida.get(),
+        resultado = fq.filtrar_rgb(
+            self.app.atual, self._mascara,
+            self.var_metodo.get(), self.var_saida.get(),
         )
-        self.app.aplicar_resultado(cinza_para_rgb(resultado))
+        self.app.aplicar_resultado(resultado)
         self.app.status.set("Filtro de frequência aplicado pela transformada inversa.")
 
     def aplicar_teorema(self):
         if not self.app.precisa_imagem():
             return
-        g = cinza(self.app.atual).astype(np.float64)
         k = kernel_media(3)
         k /= k.sum()
         try:
-            filtrada = fq.convolucao_circular_frequencia(g, k, self.var_metodo.get())
+            filtrada = fq.convolucao_circular_rgb(
+                self.app.atual, k, self.var_metodo.get())
         except ValueError as erro:
             messagebox.showerror("Teorema da convolução", str(erro), parent=self.app.root)
             return
         filtrada = np.clip(np.floor(filtrada + 0.5), 0, 255).astype(np.uint8)
-        self.app.aplicar_resultado(cinza_para_rgb(filtrada))
+        self.app.aplicar_resultado(filtrada)
         self.app.status.set("Convolução circular calculada pelo teorema da convolução.")
 
     def aplicar_aliasing(self):

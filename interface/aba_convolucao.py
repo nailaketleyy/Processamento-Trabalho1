@@ -17,7 +17,7 @@ PREDEFINIDOS = [
 TAMANHOS = [str(n) for n in range(3, 22, 2)]            # 3, 5, ..., 21
 BORDAS = {"Zeros": "zeros", "Replicar borda": "replicar", "Espelhar": "espelhar"}
 SAIDAS = {"Saturar em [0, 255]": "saturar", "Valor absoluto": "absoluto",
-          "Normalizar [mín, máx] → [0, 255]": "normalizar"}
+          "Normalizar apenas na prévia": "normalizar"}
 
 
 class AbaConvolucao(Aba):
@@ -78,8 +78,13 @@ class AbaConvolucao(Aba):
 
         bt = ttk.Frame(f)
         bt.pack(pady=6)
-        ttk.Button(bt, text="Pré-visualizar", command=lambda: app.prever(self.fn_filtro)).pack(side="left", padx=4)
-        ttk.Button(bt, text="Aplicar filtro", command=lambda: app.aplicar(self.fn_filtro)).pack(side="left", padx=4)
+        ttk.Button(
+            bt, text="Pré-visualizar",
+            command=lambda: app.prever(lambda: self.fn_filtro(previa=True)),
+        ).pack(side="left", padx=4)
+        ttk.Button(
+            bt, text="Aplicar filtro", command=lambda: app.aplicar(self.fn_filtro),
+        ).pack(side="left", padx=4)
 
         self._gerar()
 
@@ -221,7 +226,7 @@ class AbaConvolucao(Aba):
                      f"{min(interno.winfo_reqheight() + 80, 650)}")
 
     # ---------------- aplicação ----------------
-    def fn_filtro(self):
+    def fn_filtro(self, previa=False):
         if self.var_preset.get() == "Mediana":
             return cv.mediana(self.app.atual, self._n(),
                               borda=BORDAS[self.var_borda.get()])
@@ -230,7 +235,10 @@ class AbaConvolucao(Aba):
             soma = k.sum()
             if soma != 0:
                 k = k / soma
+        saida = SAIDAS[self.var_saida.get()]
+        if saida == "normalizar" and not previa:
+            saida = "saturar"
         return cv.filtrar(self.app.atual, k,
                           usar_convolucao=(self.var_op.get() == "conv"),
                           borda=BORDAS[self.var_borda.get()],
-                          saida=SAIDAS[self.var_saida.get()])
+                          saida=saida)

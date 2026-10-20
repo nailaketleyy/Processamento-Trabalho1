@@ -73,10 +73,11 @@ Filtros disponíveis:
   personalizado.
 
 As operações de convolução são calculadas em ponto flutuante. O seletor
-**Saída** converte o resultado para 8 bits para exibi-lo como imagem:
-**saturar** limita os valores a `[0,255]`, **valor absoluto** é útil para
-respostas derivativas e **normalizar** mapeia o mínimo/máximo do resultado para
-`[0,255]`. A mediana é não linear e não usa coeficientes de kernel.
+**Saída** converte o resultado para 8 bits: **saturar** limita os valores a
+`[0,255]`, **valor absoluto** é útil para respostas derivativas e
+**normalizar apenas na prévia** mapeia o mínimo/máximo para `[0,255]` sem
+gravar a normalização ao aplicar o filtro. A mediana é não linear, ordena os
+valores da janela e não usa coeficientes de kernel.
 
 ## Sobel e gradiente
 
@@ -95,23 +96,27 @@ amostragem na imagem de origem. A rotação positiva é no sentido horário da
 tela. O pivô padrão é o centro da imagem, mas pode ser definido em coordenadas
 `(x,y)`; a translação usa `dx` para direita/esquerda e `dy` para baixo/cima.
 
-A saída preserva largura e altura da imagem. Regiões que caem fora da imagem
-de origem são preenchidas de preto. **Vizinho mais próximo** escolhe o pixel
-de origem mais próximo; **bilinear** calcula uma média ponderada dos quatro
+A saída preserva largura e altura da imagem por padrão. **Expandir saída**
+calcula um quadro que contém a transformação; o processamento é recusado se a
+saída ultrapassar 16 milhões de pixels. Regiões que caem fora da imagem de
+origem são preenchidas de preto. **Vizinho mais próximo** escolhe o pixel de
+origem mais próximo; **bilinear** calcula uma média ponderada dos quatro
 vizinhos. Use **Pré-visualizar** antes de aplicar a transformação.
 
 ## Transformada de Fourier e aliasing
 
-A aba **Frequência / Aliasing** transforma a luminância para o domínio da
-frequência. A implementação própria da DFT/IDFT é oferecida para estudo e tem
-limite de 4096 pixels devido ao custo; **FFT NumPy** é recomendada para imagens
-maiores. O espectro aparece deslocado ao centro e em escala logarítmica.
+A aba **Frequência / Aliasing** mostra o espectro da luminância e aplica a
+mesma máscara de frequência separadamente aos canais RGB. A DFT/IDFT própria
+tem limite de 4096 pixels; a FFT radix-2 própria aceita dimensões que sejam
+potências de 2, e **FFT NumPy** aceita dimensões arbitrárias. O espectro aparece
+deslocado ao centro e em escala logarítmica.
 
 Estão disponíveis os filtros ideais **passa-baixa**, **rejeita-baixa**,
 **passa-faixa**, **rejeita-faixa**, **passa-notch** e **rejeita-notch**. Seus
 cortes são distâncias em pixels no plano de frequências. Também se pode editar
 o espectro com um pincel: nível 0 rejeita, nível 1 mantém, e valores
-intermediários atenuam; o modo suave produz uma transição gradual. A IDFT
+intermediários atenuam; o modo suave produz uma transição gradual. Os filtros
+notch aceitam vários centros, cada um aplicado junto ao seu simétrico. A IDFT
 reconstrói a imagem e oferece saturação ou normalização para exibição.
 
 O botão de convolução circular demonstra

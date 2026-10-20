@@ -25,6 +25,18 @@ Dentro da aba use a API do aplicativo (self.app):
 import tkinter as tk
 from tkinter import ttk
 
+ROTULOS_ABAS = {
+    "Intensidade": "Int",
+    "Linear por partes": "Lin",
+    "Esteganografia": "Esteg",
+    "Histograma": "Hist",
+    "Convolução": "Conv",
+    "Sobel / Gradiente": "Sobel",
+    "Geometria": "Geom",
+    "Frequência / Aliasing": "Freq",
+    "Cor RGB / HSI": "Cor",
+}
+
 
 class Aba:
     titulo = "Aba"
@@ -33,7 +45,7 @@ class Aba:
         self.app = app
         self.notebook = notebook
         self.externo = ttk.Frame(notebook)
-        notebook.add(self.externo, text=self.titulo)
+        notebook.add(self.externo, text=ROTULOS_ABAS.get(self.titulo, self.titulo))
 
         tela = tk.Canvas(self.externo, highlightthickness=0)
         barra = ttk.Scrollbar(self.externo, orient="vertical", command=tela.yview)

@@ -15,11 +15,14 @@ def transformar(
     deslocamento=(0.0, 0.0),
     pivo=None,
     interpolacao="vizinho",
+    expandir=False,
+    max_pixels=16_000_000,
 ):
     """Aplica escala, rotação e translação, nessa ordem geométrica direta.
 
     `angulo` é em graus e positivo no sentido horário da tela. `pivo` e
-    `deslocamento` seguem (x, y). A imagem de saída conserva o formato.
+    `deslocamento` seguem (x, y). A saída conserva o formato, a menos que
+    `expandir=True`; nesse modo, dimensões acima de `max_pixels` são rejeitadas.
     """
     img = np.asarray(img)
     if img.ndim not in (2, 3) or img.size == 0:
@@ -31,6 +34,8 @@ def transformar(
         raise ValueError("Escalas devem ser positivas e parâmetros finitos.")
     if interpolacao not in ("vizinho", "bilinear"):
         raise ValueError("Interpolação deve ser 'vizinho' ou 'bilinear'.")
+    if not isinstance(max_pixels, (int, np.integer)) or max_pixels < 1:
+        raise ValueError("O limite de pixels deve ser um inteiro positivo.")
 
     h, w = img.shape[:2]
     if pivo is None:
@@ -40,11 +45,32 @@ def transformar(
         if not np.isfinite([px, py]).all():
             raise ValueError("O pivô deve conter coordenadas finitas.")
 
-    yy, xx = np.indices((h, w), dtype=np.float64)
-    x = xx - px - dx
-    y = yy - py - dy
     theta = np.deg2rad(angulo)
     cos_t, sin_t = np.cos(theta), np.sin(theta)
+
+    if expandir:
+        cantos_x = np.array([0, w - 1, 0, w - 1], dtype=np.float64) - px
+        cantos_y = np.array([0, 0, h - 1, h - 1], dtype=np.float64) - py
+        destinos_x = px + dx + cos_t * sx * cantos_x - sin_t * sy * cantos_y
+        destinos_y = py + dy + sin_t * sx * cantos_x + cos_t * sy * cantos_y
+        origem_x, origem_y = np.floor(destinos_x.min()), np.floor(destinos_y.min())
+        fim_x, fim_y = np.ceil(destinos_x.max()), np.ceil(destinos_y.max())
+        largura_saida = int(fim_x - origem_x + 1)
+        altura_saida = int(fim_y - origem_y + 1)
+    else:
+        origem_x = origem_y = 0
+        largura_saida, altura_saida = w, h
+
+    total_pixels = largura_saida * altura_saida
+    if total_pixels > max_pixels:
+        raise ValueError(
+            f"A saída de {largura_saida}×{altura_saida} pixels ({total_pixels:,} pixels) "
+            f"excede o limite de {max_pixels:,} pixels. Reduza a escala ou desative "
+            "'Expandir saída'.")
+
+    yy, xx = np.indices((altura_saida, largura_saida), dtype=np.float64)
+    x = xx + origem_x - px - dx
+    y = yy + origem_y - py - dy
 
     # Inverte primeiro a rotação e depois a escala da transformação direta.
     x_src = (cos_t * x + sin_t * y) / sx + px

@@ -58,6 +58,15 @@ class TestDeteccaoDeBordas(unittest.TestCase):
             interpolacao="bilinear")
         self.assertEqual(int(resultado[1, 2]), 190)
 
+    def test_expandir_saida_aumenta_dimensoes(self):
+        img = np.full((4, 4, 3), 100, dtype=np.uint8)
+        resultado = transformar(img, escala=(2, 2), expandir=True)
+        self.assertEqual(resultado.shape, (8, 8, 3))
+
+    def test_expandir_saida_rejeita_excesso_de_pixels_antes_de_alocar(self):
+        with self.assertRaisesRegex(ValueError, "excede o limite"):
+            transformar(self.img, escala=(2, 2), expandir=True, max_pixels=100)
+
     def test_rejeita_escala_nao_positiva(self):
         with self.assertRaises(ValueError):
             transformar(self.img, escala=(0, 1))

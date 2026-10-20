@@ -17,6 +17,18 @@ class TestFourier(unittest.TestCase):
         np.testing.assert_allclose(f, np.fft.fft2(dados), atol=1e-10)
         np.testing.assert_allclose(fq.idft2(f), dados, atol=1e-10)
 
+    def test_fft_propria_bate_numpy_e_reconstroi(self):
+        rng = np.random.default_rng(21)
+        dados = rng.random((8, 4))
+        espectro = fq.transformar(dados, "fft-propria")
+        np.testing.assert_allclose(espectro, np.fft.fft2(dados), atol=1e-10)
+        np.testing.assert_allclose(
+            fq.inversa(espectro, "fft-propria"), dados, atol=1e-10)
+
+    def test_fft_propria_rejeita_dimensoes_nao_potencias_de_dois(self):
+        with self.assertRaisesRegex(ValueError, "potências de 2"):
+            fq.transformar(np.zeros((7, 8)), "fft-propria")
+
     def test_limite_dft_direta(self):
         with self.assertRaises(ValueError):
             fq.dft2(np.zeros((65, 64)))
@@ -32,9 +44,11 @@ class TestFourier(unittest.TestCase):
         self.assertEqual(faixa[10, 14], 1)
         self.assertEqual(faixa[10, 10], 0)
         notch = fq.filtro_ideal(
-            forma, "rejeita-notch", centros=[(0, 4)], raio_notch=1)
+            forma, "rejeita-notch", centros=[(0, 4), (3, 0)], raio_notch=1)
         self.assertEqual(notch[10, 14], 0)
         self.assertEqual(notch[10, 6], 0)
+        self.assertEqual(notch[13, 10], 0)
+        self.assertEqual(notch[7, 10], 0)
 
     def test_edicao_de_espectro_e_reconstrucao(self):
         dados = np.arange(64, dtype=np.uint8).reshape(8, 8)
@@ -45,12 +59,28 @@ class TestFourier(unittest.TestCase):
         saida = fq.reconstruir(fq.filtrar_espectro(f, mascara), saida="normalizar")
         self.assertEqual(saida.shape, dados.shape)
 
+    def test_filtro_de_frequencia_preserva_canais_rgb(self):
+        imagem = np.zeros((4, 4, 3), dtype=np.uint8)
+        imagem[..., 0] = np.arange(16).reshape(4, 4)
+        imagem[..., 1] = 80
+        imagem[..., 2] = 255 - imagem[..., 0]
+        resultado = fq.filtrar_rgb(
+            imagem, np.ones((4, 4)), metodo="fft", saida="saturar")
+        np.testing.assert_array_equal(resultado, imagem)
+
     def test_teorema_convolucao_kernel_identidade(self):
         dados = np.arange(30, dtype=np.float64).reshape(5, 6)
         kernel = np.zeros((3, 3))
         kernel[1, 1] = 1
         np.testing.assert_allclose(
             fq.convolucao_circular_frequencia(dados, kernel), dados, atol=1e-10)
+
+    def test_teorema_convolucao_preserva_canais_rgb(self):
+        imagem = np.arange(5 * 6 * 3, dtype=np.uint8).reshape(5, 6, 3)
+        kernel = np.zeros((3, 3))
+        kernel[1, 1] = 1
+        np.testing.assert_allclose(
+            fq.convolucao_circular_rgb(imagem, kernel), imagem, atol=1e-10)
 
     def test_teorema_convolucao_kernel_media_com_wraparound(self):
         dados = np.arange(30, dtype=np.float64).reshape(5, 6)

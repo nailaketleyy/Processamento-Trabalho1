@@ -16,6 +16,8 @@ import numpy as np
 
 BORDAS = ("zeros", "replicar", "espelhar")
 SAIDAS = ("saturar", "absoluto", "normalizar")
+SOBEL_X = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
+SOBEL_Y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float64)
 
 
 def _validar_tamanho(n):
@@ -118,14 +120,18 @@ def mediana(img, n=3, borda="replicar"):
     h, largura = img.shape[:2]
     raio = n // 2
     preenchida = preencher(img.astype(np.float64), raio, raio, borda)
-    linhas_bloco = max(1, min(h, (64 * 1024 * 1024) // max(1, largura * n * n * 8)))
+    canais = img.shape[2] if img.ndim == 3 else 1
+    linhas_bloco = max(
+        1, min(h, (64 * 1024 * 1024) // max(1, largura * canais * n * n * 8)))
     saida = np.empty(img.shape, dtype=np.float64)
     for y in range(0, h, linhas_bloco):
         fim = min(h, y + linhas_bloco)
         bloco = preenchida[y:fim + 2 * raio]
         janelas = np.lib.stride_tricks.sliding_window_view(
             bloco, (n, n), axis=(0, 1))
-        saida[y:fim] = np.median(janelas, axis=(-1, -2))
+        janelas_ordenadas = np.sort(
+            janelas.reshape(janelas.shape[:-2] + (n * n,)), axis=-1)
+        saida[y:fim] = janelas_ordenadas[..., (n * n) // 2]
     return para_uint8(saida)
 
 
@@ -182,8 +188,8 @@ def kernel_high_boost(n=3, A=1.5, sigma=None):
 # filtros 3x3 clássicos (com "saída" sugerida)
 KERNELS_3X3 = {
     "Laplaciano":                 ([[0, 1, 0], [1, -4, 1], [0, 1, 0]], "absoluto"),
-    "Sobel (bordas verticais)":   ([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], "absoluto"),
-    "Sobel (bordas horizontais)": ([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], "absoluto"),
+    "Sobel (bordas verticais)":   (SOBEL_X.tolist(), "absoluto"),
+    "Sobel (bordas horizontais)": (SOBEL_Y.tolist(), "absoluto"),
     "Média ponderada (1-2-1)":   ([[1, 2, 1], [2, 4, 2], [1, 2, 1]], "saturar"),   # Fig. 3.32(b)
     "Nitidez (realce)":           ([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], "saturar"),
 }

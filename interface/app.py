@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import numpy as np
 from PIL import Image, ImageTk   # Pillow: SOMENTE abrir/salvar arquivos e exibir
 from algoritmos.base import ajustar_para_tela
+from .widgets import espacamento_botao
 
 # Janela principal: menu, abrir/salvar, histórico (desfazer) e exibição.
 
@@ -11,6 +12,10 @@ class App:
 
     def __init__(self, root, abas):
         self.root = root
+        estilo = ttk.Style(root)
+        estilo.configure("TButton", padding=(10, 6))
+        estilo.configure("TNotebook.Tab", padding=(8, 6))
+        root.bind_class("TButton", "<Map>", espacamento_botao, add="+")
         root.title("Processador de Imagens")
         root.geometry("1280x760")
         root.minsize(900, 600)
